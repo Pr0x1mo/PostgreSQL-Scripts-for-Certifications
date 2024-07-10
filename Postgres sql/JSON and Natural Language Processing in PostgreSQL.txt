@@ -1,0 +1,46 @@
+-- Create the tables
+CREATE TABLE docs01 (
+    id SERIAL,
+    doc TEXT,
+    PRIMARY KEY(id)
+);
+
+CREATE TABLE invert01 (
+    keyword TEXT,
+    doc_id INTEGER REFERENCES docs01(id) ON DELETE CASCADE,
+    PRIMARY KEY (keyword, doc_id)
+);
+
+-- Insert documents into docs01
+INSERT INTO docs01 (doc) VALUES
+('programming our program is the story and the problem you are'),
+('trying to solve is the idea'),
+('Once you learn one programming language such as Python you will find it'),
+('much easier to learn a second programming language such as JavaScript or'),
+('C The new programming language has very different vocabulary and'),
+('grammar but the problemsolving skills will be the same across all'),
+('You will learn the vocabulary and sentences of Python pretty'),
+('quickly It will take longer for you to be able to write a coherent'),
+('program to solve a brandnew problem We teach programming much like we'),
+('teach writing We start reading and explaining programs then we write');
+
+-- Populate the invert01 table without duplicates
+DO $$
+DECLARE
+    r RECORD;
+    word TEXT;
+    words TEXT[];
+    unique_words TEXT[];
+BEGIN
+    FOR r IN (SELECT id, lower(doc) as doc FROM docs01) LOOP
+        words := regexp_split_to_array(r.doc, '\s+');
+        unique_words := ARRAY(SELECT DISTINCT unnest(words));
+        FOREACH word IN ARRAY unique_words LOOP
+            INSERT INTO invert01 (keyword, doc_id) VALUES (word, r.id)
+            ON CONFLICT DO NOTHING;
+        END LOOP;
+    END LOOP;
+END $$;
+
+-- Query to verify the results
+SELECT keyword, doc_id FROM invert01 ORDER BY keyword, doc_id LIMIT 10;

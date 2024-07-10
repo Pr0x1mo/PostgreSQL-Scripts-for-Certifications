@@ -1,0 +1,274 @@
+
+-- Create the keyvalue table
+CREATE TABLE keyvalue (
+  id SERIAL,
+  key VARCHAR(128) UNIQUE,
+  value VARCHAR(128) UNIQUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY(id)
+);
+
+-- Create the trigger function
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  -- 'NEW' is a special record variable that holds the new values of the row being inserted or updated
+  -- Set the updated_at column of the new row to the current timestamp
+  NEW.updated_at = NOW();
+  -- Return the new row with the updated updated_at value
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create the trigger
+CREATE TRIGGER update_updated_at_trigger
+-- Fire the trigger before an update on the keyvalue table
+BEFORE UPDATE ON keyvalue
+-- Execute the trigger for each row that is updated
+FOR EACH ROW
+-- Call the update_updated_at_column function to update the updated_at column
+EXECUTE FUNCTION update_updated_at_column();
+
+
+-- Create the album table
+CREATE TABLE album (
+  id SERIAL,
+  title VARCHAR(128) UNIQUE,
+  PRIMARY KEY(id)
+);
+
+-- Create the track table
+CREATE TABLE track (
+    id SERIAL,
+    title VARCHAR(128),
+    len INTEGER, 
+    rating INTEGER, 
+    count INTEGER,
+    album_id INTEGER REFERENCES album(id) ON DELETE CASCADE,
+    UNIQUE(title, album_id),
+    PRIMARY KEY(id)
+);
+
+-- Create the track_raw table
+CREATE TABLE track_raw (
+    title TEXT, 
+    artist TEXT, 
+    album TEXT, 
+    album_id INTEGER,
+    count INTEGER, 
+    rating INTEGER, 
+    len INTEGER
+);
+
+-- Load CSV data into track_raw table
+\copy track_raw(title, artist, album, count, rating, len) FROM 'library.csv' DELIMITER ',' CSV HEADER;
+
+-- Insert distinct albums into the album table
+INSERT INTO album (title)
+SELECT DISTINCT album
+FROM track_raw;
+
+-- Update track_raw table with album_id
+UPDATE track_raw
+SET album_id = (SELECT album.id FROM album WHERE album.title = track_raw.album);
+
+-- Copy data from track_raw to track
+INSERT INTO track (title, album_id, count, rating, len)
+SELECT title, album_id, count, rating, len
+FROM track_raw;
+
+
+-- Create the lookup tables
+CREATE TABLE category (
+  id SERIAL,
+  name VARCHAR(128) UNIQUE,
+  PRIMARY KEY(id)
+);
+
+CREATE TABLE state (
+  id SERIAL,
+  name VARCHAR(128) UNIQUE,
+  PRIMARY KEY(id)
+);
+
+CREATE TABLE region (
+  id SERIAL,
+  name VARCHAR(128) UNIQUE,
+  PRIMARY KEY(id)
+);
+
+CREATE TABLE iso (
+  id SERIAL,
+  name VARCHAR(128) UNIQUE,
+  PRIMARY KEY(id)
+);
+
+-- Load CSV data into unesco_raw table
+\copy unesco_raw(name, description, justification, year, longitude, latitude, area_hectares, category, state, region, iso) FROM 'whc-sites-2018-small.csv' WITH DELIMITER ',' CSV HEADER;
+
+-- Insert distinct values into lookup tables
+INSERT INTO category (name)
+SELECT DISTINCT category
+FROM unesco_raw;
+
+INSERT INTO state (name)
+SELECT DISTINCT state
+FROM unesco_raw;
+
+INSERT INTO region (name)
+SELECT DISTINCT region
+FROM unesco_raw;
+
+INSERT INTO iso (name)
+SELECT DISTINCT iso
+FROM unesco_raw;
+
+-- Update unesco_raw with foreign keys
+UPDATE unesco_raw
+SET category_id = (SELECT category.id FROM category WHERE category.name = unesco_raw.category);
+
+UPDATE unesco_raw
+SET state_id = (SELECT state.id FROM state WHERE state.name = unesco_raw.state);
+
+UPDATE unesco_raw
+SET region_id = (SELECT region.id FROM region WHERE region.name = unesco_raw.region);
+
+UPDATE unesco_raw
+SET iso_id = (SELECT iso.id FROM iso WHERE iso.name = unesco_raw.iso);
+
+-- Create the unesco table with normalized data
+CREATE TABLE unesco (
+  id SERIAL,
+  name TEXT,
+  description TEXT,
+  justification TEXT,
+  year INTEGER,
+  longitude FLOAT,
+  latitude FLOAT,
+  area_hectares FLOAT,
+  category_id INTEGER REFERENCES category(id),
+  state_id INTEGER REFERENCES state(id),
+  region_id INTEGER REFERENCES region(id),
+  iso_id INTEGER REFERENCES iso(id),
+  PRIMARY KEY(id)
+);
+
+-- Copy data from unesco_raw to unesco
+INSERT INTO unesco (name, description, justification, year, longitude, latitude, area_hectares, category_id, state_id, region_id, iso_id)
+SELECT name, description, justification, year, longitude, latitude, area_hectares, category_id, state_id, region_id, iso_id
+FROM unesco_raw;
+
+SELECT unesco.name, year, category.name, state.name, region.name, iso.name
+FROM unesco
+JOIN category ON unesco.category_id = category.id
+JOIN iso ON unesco.iso_id = iso.id
+JOIN state ON unesco.state_id = state.id
+JOIN region ON unesco.region_id = region.id
+ORDER BY region.name, unesco.name
+LIMIT 3;
+
+
+-- Drop and create the album table
+DROP TABLE IF EXISTS album CASCADE;
+CREATE TABLE album (
+    id SERIAL,
+    title VARCHAR(128) UNIQUE,
+    PRIMARY KEY(id)
+);
+
+-- Drop and create the track table
+DROP TABLE IF EXISTS track CASCADE;
+CREATE TABLE track (
+    id SERIAL,
+    title TEXT, 
+    artist TEXT, 
+    album TEXT, 
+    album_id INTEGER REFERENCES album(id) ON DELETE CASCADE,
+    count INTEGER, 
+    rating INTEGER, 
+    len INTEGER,
+    PRIMARY KEY(id)
+);
+
+-- Drop and create the artist table
+DROP TABLE IF EXISTS artist CASCADE;
+CREATE TABLE artist (
+    id SERIAL,
+    name VARCHAR(128) UNIQUE,
+    PRIMARY KEY(id)
+);
+
+-- Drop and create the tracktoartist table
+DROP TABLE IF EXISTS tracktoartist CASCADE;
+CREATE TABLE tracktoartist (
+    id SERIAL,
+    track VARCHAR(128),
+    track_id INTEGER REFERENCES track(id) ON DELETE CASCADE,
+    artist VARCHAR(128),
+    artist_id INTEGER REFERENCES artist(id) ON DELETE CASCADE,
+    PRIMARY KEY(id)
+);
+
+-- Copy data from CSV to the track table
+\copy track(title, artist, album, count, rating, len) FROM 'library.csv' WITH DELIMITER ',' CSV HEADER;
+
+-- Insert distinct album titles into the album table
+INSERT INTO album (title)
+SELECT DISTINCT album
+FROM track;
+
+-- Update the track table to set the album_id foreign key
+UPDATE track
+SET album_id = (SELECT album.id FROM album WHERE album.title = track.album);
+
+-- Insert distinct artist names into the artist table
+INSERT INTO artist (name)
+SELECT DISTINCT artist
+FROM track;
+
+-- Insert distinct track and artist pairs into the tracktoartist table
+INSERT INTO tracktoartist (track, artist)
+SELECT DISTINCT title, artist
+FROM track;
+
+-- Update the tracktoartist table to set the track_id foreign key
+UPDATE tracktoartist
+SET track_id = (SELECT track.id FROM track WHERE track.title = tracktoartist.track);
+
+-- Update the tracktoartist table to set the artist_id foreign key
+UPDATE tracktoartist
+SET artist_id = (SELECT artist.id FROM artist WHERE artist.name = tracktoartist.artist);
+
+-- We are now done with these text fields, so drop them
+ALTER TABLE track DROP COLUMN album;
+ALTER TABLE track DROP COLUMN artist;
+ALTER TABLE tracktoartist DROP COLUMN track;
+ALTER TABLE tracktoartist DROP COLUMN artist;
+
+-- Verification query
+SELECT track.title, album.title, artist.name
+FROM track
+JOIN album ON track.album_id = album.id
+JOIN tracktoartist ON track.id = tracktoartist.track_id
+JOIN artist ON tracktoartist.artist_id = artist.id
+ORDER BY track.title
+LIMIT 3;
+
+-- Create the bigtext table
+CREATE TABLE bigtext (
+    content TEXT
+);
+
+-- Insert 100,000 records into the bigtext table
+DO $$
+BEGIN
+    FOR i IN 100000..199999 LOOP
+        INSERT INTO bigtext (content) VALUES ('This is record number ' || i || ' of quite a few text records.');
+    END LOOP;
+END $$;
+
+
+SELECT purpose FROM taxdata WHERE purpose ~ '[:;,]' ORDER BY purpose DESC LIMIT 3;
+
+This query will select the purpose column from the taxdata table where the purpose contains a colon, comma, or semicolon, and then orders the results in descending order, limiting the results to the first three entries.

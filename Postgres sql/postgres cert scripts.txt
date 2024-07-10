@@ -1,0 +1,159 @@
+#postgres cert scripts:
+
+CREATE TABLE pg4e_debug (
+    id SERIAL,
+    query VARCHAR(4096),
+    result VARCHAR(4096),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(id)
+);
+
+
+CREATE TABLE pg4e_result (
+    id SERIAL,
+    link_id INTEGER UNIQUE,
+    score FLOAT,
+    title VARCHAR(4096),
+    note VARCHAR(4096),
+    debug_log VARCHAR(8192),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP
+);
+
+
+CREATE TABLE ages (
+    name VARCHAR(128),
+    age INTEGER
+);
+
+DELETE FROM ages;
+
+INSERT INTO ages (name, age) VALUES ('Holly', 38);
+INSERT INTO ages (name, age) VALUES ('Jagat', 17);
+INSERT INTO ages (name, age) VALUES ('Jubin', 26);
+INSERT INTO ages (name, age) VALUES ('Marcel', 28);
+INSERT INTO ages (name, age) VALUES ('Sydnee', 26);
+INSERT INTO ages (name, age) VALUES ('Teigan', 35);
+
+
+CREATE TABLE automagic (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(32) NOT NULL,
+    height FLOAT NOT NULL
+);
+
+curl -O https://www.pg4e.com/tools/sql/library.csv
+
+CREATE TABLE track_raw (
+    title TEXT,
+    artist TEXT,
+    album TEXT,
+    count INTEGER,
+    rating INTEGER,
+    len INTEGER
+);
+
+
+\copy track_raw(title,artist,album,count,rating,len) FROM 'library.csv' WITH DELIMITER ',' CSV;
+
+
+-- Create the make table
+CREATE TABLE make (
+    id SERIAL,
+    name VARCHAR(128) UNIQUE,
+    PRIMARY KEY(id)
+);
+
+-- Create the model table
+CREATE TABLE model (
+  id SERIAL,
+  name VARCHAR(128),
+  make_id INTEGER REFERENCES make(id) ON DELETE CASCADE,
+  PRIMARY KEY(id)
+);
+
+-- Insert data into make table
+INSERT INTO make (name) VALUES
+('BMW'),
+('Mercedes-Benz');
+
+-- Insert data into model table
+INSERT INTO model (name, make_id) VALUES
+('Z4 M40i', (SELECT id FROM make WHERE name = 'BMW')),
+('Z4 Roadster', (SELECT id FROM make WHERE name = 'BMW')),
+('Z4 sDrive28i', (SELECT id FROM make WHERE name = 'BMW')),
+('190D 2.5', (SELECT id FROM make WHERE name = 'Mercedes-Benz')),
+('190D 2.5 Turbo', (SELECT id FROM make WHERE name = 'Mercedes-Benz'));
+
+
+-- Create the student table
+CREATE TABLE student (
+    id SERIAL,
+    name VARCHAR(128) UNIQUE,
+    PRIMARY KEY(id)
+);
+
+-- Create the course table
+DROP TABLE course CASCADE;
+CREATE TABLE course (
+    id SERIAL,
+    title VARCHAR(128) UNIQUE,
+    PRIMARY KEY(id)
+);
+
+-- Create the roster table
+DROP TABLE roster CASCADE;
+CREATE TABLE roster (
+    id SERIAL,
+    student_id INTEGER REFERENCES student(id) ON DELETE CASCADE,
+    course_id INTEGER REFERENCES course(id) ON DELETE CASCADE,
+    role INTEGER,
+    UNIQUE(student_id, course_id),
+    PRIMARY KEY (id)
+);
+
+-- Insert data into student table
+INSERT INTO student (name) VALUES
+('Man'),
+('Bobbie'),
+('Kenzie'),
+('Sydnee'),
+('Zena'),
+('Zidane'),
+('Carwyn'),
+('Elisau'),
+('Ryden'),
+('Toby'),
+('Jon'),
+('Ahmed'),
+('Anja'),
+('Antonia'),
+('Corrin');
+
+-- Insert data into course table
+INSERT INTO course (title) VALUES
+('si106'),
+('si110'),
+('si206');
+
+-- Insert data into roster table
+INSERT INTO roster (student_id, course_id, role) VALUES
+((SELECT id FROM student WHERE name = 'Man'), (SELECT id FROM course WHERE title = 'si106'), 1),
+((SELECT id FROM student WHERE name = 'Bobbie'), (SELECT id FROM course WHERE title = 'si106'), 0),
+((SELECT id FROM student WHERE name = 'Kenzie'), (SELECT id FROM course WHERE title = 'si106'), 0),
+((SELECT id FROM student WHERE name = 'Sydnee'), (SELECT id FROM course WHERE title = 'si106'), 0),
+((SELECT id FROM student WHERE name = 'Zena'), (SELECT id FROM course WHERE title = 'si106'), 0),
+((SELECT id FROM student WHERE name = 'Zidane'), (SELECT id FROM course WHERE title = 'si110'), 1),
+((SELECT id FROM student WHERE name = 'Carwyn'), (SELECT id FROM course WHERE title = 'si110'), 0),
+((SELECT id FROM student WHERE name = 'Elisau'), (SELECT id FROM course WHERE title = 'si110'), 0),
+((SELECT id FROM student WHERE name = 'Ryden'), (SELECT id FROM course WHERE title = 'si110'), 0),
+((SELECT id FROM student WHERE name = 'Toby'), (SELECT id FROM course WHERE title = 'si110'), 0),
+((SELECT id FROM student WHERE name = 'Jon'), (SELECT id FROM course WHERE title = 'si206'), 1),
+((SELECT id FROM student WHERE name = 'Ahmed'), (SELECT id FROM course WHERE title = 'si206'), 0),
+((SELECT id FROM student WHERE name = 'Anja'), (SELECT id FROM course WHERE title = 'si206'), 0),
+((SELECT id FROM student WHERE name = 'Antonia'), (SELECT id FROM course WHERE title = 'si206'), 0),
+((SELECT id FROM student WHERE name = 'Corrin'), (SELECT id FROM course WHERE title = 'si206'), 0);
+
+
+
+
